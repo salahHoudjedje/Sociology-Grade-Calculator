@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { fontFamily } from "tailwindcss/defaultTheme"; // Import defaultTheme
 
 export default {
     darkMode: ["class"],
@@ -9,6 +10,10 @@ export default {
   ],
   theme: {
   	extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", ...fontFamily.sans], // Use Inter as primary sans
+        arabic: ["var(--font-noto-kufi-arabic)", ...fontFamily.sans], // Add Arabic font
+      },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -82,11 +87,16 @@ export default {
   				to: {
   					height: '0'
   				}
-  			}
+  			},
+         'fade-in': { // Added fade-in animation keyframe
+           '0%': { opacity: '0', transform: 'translateY(10px)' },
+           '100%': { opacity: '1', transform: 'translateY(0)' },
+         }
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+         'fadeIn': 'fade-in 0.5s ease-out forwards', // Added fade-in animation utility
   		}
   	}
   },
