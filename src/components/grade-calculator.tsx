@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import type { Subject } from '@/types/subject';
 import { initialSubjects, TOTAL_COEFFICIENT } from '@/data/subjects';
 import { calculateSubjectAverage, calculateSemesterAverage, isFailingGrade } from '@/lib/calculation';
@@ -8,19 +9,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, BookOpen, Sigma, Percent, TrendingUp, TrendingDown, Calculator as CalculatorIcon } from 'lucide-react';
+import { GraduationCap, BookOpen, Sigma, Percent, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+// Function to create a fresh copy of initial subjects with null grades
+const getInitialSubjectsState = (): Subject[] =>
+  JSON.parse(JSON.stringify(initialSubjects)).map((s: Subject) => ({
+    ...s,
+    lectureGrade: null,
+    practicalGrade: null,
+    subjectAverage: null,
+  }));
+
 
 export function GradeCalculator() {
-  const [subjects, setSubjects] = useState<Subject[]>(initialSubjects);
+  const [subjects, setSubjects] = useState<Subject[]>(getInitialSubjectsState());
   const [semesterAverage, setSemesterAverage] = useState<number | null>(null);
   const [studentName, setStudentName] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
-    // Retrieve student name from localStorage on component mount
     const firstName = localStorage.getItem('studentFirstName') || '';
     const lastName = localStorage.getItem('studentLastName') || '';
     setStudentName(`${firstName} ${lastName}`.trim());
@@ -35,8 +56,7 @@ export function GradeCalculator() {
          description: `العلامة يجب أن تكون بين 0 و 20. المدخل "${value}" غير صالح.`,
          variant: "destructive",
        });
-       // Optionally revert the input or clear it - for now, just show toast
-       return; // Stop processing this invalid input further in this handler
+       return;
      }
 
     setSubjects(prevSubjects =>
@@ -46,39 +66,36 @@ export function GradeCalculator() {
              ...subject,
              [gradeType === 'lecture' ? 'lectureGrade' : 'practicalGrade']: grade,
            };
-           // Recalculate subject average immediately on grade change
            const subjAvg = calculateSubjectAverage(updatedSubject);
            return { ...updatedSubject, subjectAverage: subjAvg };
         }
         return subject;
       })
     );
-     // Automatically recalculate semester average whenever a grade changes
-     triggerSemesterCalculation();
+     triggerSemesterCalculation(); // Recalculate semester average on every valid grade change
   };
 
-  // Recalculate semester average whenever subjects state changes
    const triggerSemesterCalculation = () => {
-     // Create a deep copy to avoid direct mutation if calculateSemesterAverage modifies the array
-      const subjectsCopy = JSON.parse(JSON.stringify(subjects)) as Subject[];
-      const finalAverage = calculateSemesterAverage(subjectsCopy); // Use copy here
-      setSemesterAverage(finalAverage);
-
-       // Update the main state with the averages calculated within calculateSemesterAverage
-       setSubjects(prevSubjects =>
-         prevSubjects.map(prevSub => {
-           const updatedSub = subjectsCopy.find(subCopy => subCopy.id === prevSub.id);
-           return updatedSub ? { ...prevSub, subjectAverage: updatedSub.subjectAverage } : prevSub;
-         })
-       );
+     // Use the current subjects state directly
+     const finalAverage = calculateSemesterAverage(subjects);
+     setSemesterAverage(finalAverage);
    };
 
-   // Effect to recalculate semester average when subjects array changes
-   // This might be redundant if triggerSemesterCalculation is called directly in handleGradeChange
-   // Consider performance implications if calculation is very complex.
-   // useEffect(() => {
-   //   triggerSemesterCalculation();
-   // }, [subjects]); // Dependency array includes subjects
+    // Recalculate semester average whenever subjects state changes
+    // This ensures the average updates correctly after state changes from handleGradeChange
+    useEffect(() => {
+      triggerSemesterCalculation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subjects]); // Dependency array includes subjects
+
+   const handleReset = () => {
+     setSubjects(getInitialSubjectsState());
+     setSemesterAverage(null);
+     toast({
+       title: "إعادة تعيين",
+       description: "تم مسح جميع العلامات والمعدل.",
+     });
+   };
 
 
   const renderGradeInput = (subject: Subject, gradeType: 'lecture' | 'practical') => {
@@ -101,7 +118,7 @@ export function GradeCalculator() {
            !isDisabled && value !== null && isFailingGrade(value) && "border-destructive ring-destructive focus-visible:ring-destructive text-destructive",
           !isDisabled && value !== null && !isFailingGrade(value) && "border-green-500 ring-green-500 focus-visible:ring-green-500 text-green-700"
         )}
-        aria-label={`${subject.name} ${gradeType === 'lecture' ? 'Lecture' : 'Practical'} Grade`}
+        aria-label={`${subject.name} ${gradeType === 'lecture' ? 'علامة المحاضرة' : 'علامة التطبيق'} `}
       />
     );
   };
@@ -157,17 +174,6 @@ export function GradeCalculator() {
           </div>
         </CardContent>
          <CardFooter className="flex flex-col items-center gap-4 mt-6">
-            {/*
-             <Button
-               onClick={triggerSemesterCalculation}
-               className="w-full md:w-auto bg-primary hover:bg-primary/90 transition-colors"
-               disabled={subjects.some(s => (s.hasLecture && (s.lectureGrade === null || s.practicalGrade === null)) || (!s.hasLecture && s.practicalGrade === null))}
-             >
-               <CalculatorIcon className="ml-2" size={18} />
-               حساب المعدل الفصلي
-             </Button>
-            */}
-
             {semesterAverage !== null && (
              <div className="text-center p-4 border border-primary rounded-lg bg-primary/10 w-full animate-fadeIn">
                <p className="text-lg font-semibold text-primary flex items-center justify-center gap-2">
@@ -187,11 +193,38 @@ export function GradeCalculator() {
                </p>
              </div>
            )}
-            {semesterAverage === null && subjects.some(s => s.subjectAverage === null) && (
+            {semesterAverage === null && subjects.some(s => s.subjectAverage === null && ((s.hasLecture && (s.lectureGrade === null || s.practicalGrade === null)) || (!s.hasLecture && s.practicalGrade === null))) && (
                  <p className="text-center text-destructive text-sm">
                      الرجاء إكمال إدخال جميع العلامات المطلوبة أو التأكد من صحتها (0-20) لحساب المعدل.
                  </p>
              )}
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full md:w-auto border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <RotateCcw className="ml-2" size={18} />
+                  إعادة تعيين الكل
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent dir="rtl"> {/* Ensure dialog is RTL */}
+                <AlertDialogHeader>
+                  <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    سيؤدي هذا الإجراء إلى مسح جميع العلامات المدخلة والمعدل المحسوب. لا يمكن التراجع عن هذا الإجراء.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleReset} className="bg-destructive hover:bg-destructive/90">
+                    تأكيد المسح
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
          </CardFooter>
       </Card>
     </div>
